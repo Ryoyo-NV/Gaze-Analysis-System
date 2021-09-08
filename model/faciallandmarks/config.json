@@ -1,0 +1,28 @@
+{
+    "max_batch_size": 1,
+    "input": [
+        {
+            "name": "input_face_images",
+            "data_type": "TYPE_FP32",
+            "dims": [ 1, 80, 80 ]
+        }
+    ],
+    "output": [
+        {
+            "name": "softargmax",
+            "data_type": "TYPE_FP32",
+            "dims": [ 160, 1, 1 ]
+        },
+        {
+            "name": "softargmax_1",
+            "data_type": "TYPE_FP32",
+            "dims": [ 80, 1, 1 ]
+        }
+    ],
+    "plugins": [
+        {
+            "file": "libflnetsoftargmax.so",
+            "namespace": ""
+        }
+    ]
+}
