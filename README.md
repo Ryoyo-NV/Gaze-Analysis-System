@@ -26,7 +26,10 @@ Test on:
 
 - Jetson Xavier NX, JetPack 4.4, Video, and USB webcam. 
 
-Note: Recommend Jetson Xavier NX or higher specs.
+Note: Recommend Jetson Xavier NX or AGX Xavier.  
+The Age and gender prebuild engine model with TenserRT are built for Xavier GPU(compute capability 7.2).  
+If you want to run on not Xavier(e.g. Nano), you need to rebuild them on your device.
+See [model/readme](https://github.com/Ryoyo-NV/Gaze-Analysis-System/tree/main/model), and more.
 
 ## Installation
 There are two options to setup and it can be run local or Docker container.
