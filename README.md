@@ -1,5 +1,5 @@
 # Gaze Detection System
-This is a repository of  Gaze Detection System using NVIDIA 's Jetson and DeepStream 5.0.
+This is a repository of  Gaze Detection System using NVIDIA 's Jetson and DeepStream 6.0.
 
 For example, it is useful for measuring the effectiveness of signage advertising.  
 From webcom or pre-made videos, it detect the gaze of person watching and analyze the gender and age of that person. 
@@ -19,12 +19,12 @@ For uses other than the above, please replace the model with another model.
 ## Prerequisite
 
 - NVIDIA Jetson Platform
-- [JetPack](https://developer.nvidia.com/embedded/jetpack) 4.4
+- [JetPack](https://developer.nvidia.com/embedded/jetpack) 4.6
 - Video(.h264 format) or USB webcam
 
 Test on:
 
-- Jetson Xavier NX, JetPack 4.4, Video, and USB webcam. 
+- Jetson Xavier NX, JetPack 4.6, Video, and USB webcam. 
 
 Note: Recommend Jetson Xavier NX or AGX Xavier.  
 The Age and gender prebuild engine model with TenserRT are built for Xavier GPU(compute capability 7.2).  
@@ -36,8 +36,8 @@ There are two options to setup and it can be run local or Docker container.
 
 ### Requirements:  
 
-- [NVIDIA DeepStream](https://developer.nvidia.com/deepstream-sdk) 5.0
-- [PyTorch for JetPack 4.4](https://elinux.org/Jetson_Zoo) (PyTorch 1.6.0, Torchvision 0.6.0)
+- [NVIDIA DeepStream](https://developer.nvidia.com/deepstream-sdk) 6.0
+- [PyTorch for JetPack 4.6](https://elinux.org/Jetson_Zoo) (PyTorch 1.6.0, Torchvision 0.6.0)
 - Cython 0.29.21
 - [torch2trt](https://github.com/NVIDIA-AI-IOT/torch2trt)
 - TensorRT 7.1.3
@@ -104,13 +104,19 @@ See [NVIDIA DeepStream SDK Developer Guide](https://docs.nvidia.com/metropolis/d
 
 
 Python Bindings
-```
-$ cd /opt/nvidia/deepstream/deepstream-5.0/lib
-$ sudo python3 setup.py install
-```
+See [NVIDIA-AI-IOT/deepstream_python_apps/bindings/README.md](https://github.com/NVIDIA-AI-IOT/deepstream_python_apps/tree/master/bindings).
 
-See [NVIDIA DeepStream SDK Developer Guide](https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_Python_Sample_Apps.html#metadata-access) , and more.
+```
+$ cd /opt/nvidia/deepstream/deepstream-6.0/source
+$ sudo git clone https://github.com/NVIDIA-AI-IOT/deepstream_python_apps.git
+$ cd deepstream_python_apps/bindings
 
+$ sudo pip3 install pybind11
+$ sudo git submodule update --init
+$ sudo mkdir build && cd build
+$ sudo cmake ..  -DPYTHON_MAJOR_VERSION=3 -DPYTHON_MINOR_VERSION=6 -DPIP_PLATFORM=linux_aarch64 -DDS_PATH=/opt/nvidia/deepstream/deepstream-6.0/
+$ sudo make
+```
 
 #### 5. To install TensorRT
 JetPack has included TensorRT, only additional packages using Python.  
