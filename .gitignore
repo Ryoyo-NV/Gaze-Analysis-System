@@ -3,5 +3,6 @@ azure_config.ini.*
 model/face/*.*
 model/faciallandmarks/*.*
 model/gaze/*.*
+!model/*
 model/age/*.engine
 model/gender/*.engine
