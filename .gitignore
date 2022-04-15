@@ -1,7 +1,10 @@
 azure_config.ini.*
 **/__pycache__/
-model/face/*
-model/faciallandmarks/*
-model/gaze/*
+model/face/*.engine
+model/face/*.etlt
+model/faciallandmarks/*.engine
+model/faciallandmarks/*.etlt
+model/gaze/*.engine
+model/gaze/*.etlt
 model/age/*.engine
 model/gender/*.engine

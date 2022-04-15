@@ -55,19 +55,20 @@ Installing the five methods. Using the DeepStream tar package here.
 Download package [here](https://developer.nvidia.com/deepstream-getting-started) .
 
 ```
-$ sudo apt install deepstream-6.0
+sudo apt install deepstream-6.0
 ```
 See [NVIDIA DeepStream SDK Developer Guide](https://docs.nvidia.com/metropolis/deepstream/dev-guide/text/DS_Quickstart.html#install-the-deepstream-sdk) , and more.  
 
 
 #### 2. Clone this repository & Execute setup.sh
 ```
-$ git clone <this repo>
-$ cd <this repo>
-$ ./setup.sh
+git clone https://github.com/Ryoyo-NV/Gaze-Analysis-System
+cd Gaze-Analysis-System
+./setup.sh
 ```
 
 Note1: setup.sh requires sudo password to install some apt packages.
+
 Note2: It takes about 15 minutes to finish. 
 
 
@@ -77,17 +78,23 @@ TBD
 
 
 ## Usage 
+Set the path for cvcore_libs to LD_LIBRARY_PATH env.
+
+```
+export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib/cvcore_libs:$LD_LIBRARY_PATH
+```
+
 ### With Kibana
 Run the command after starting the Open Distro for Elasticsearch(Elasticsearch, Kibana) service. The data of visualize is sent to Open Distro for Elasticsearch.  
 
 Using video file, path to own video file dir. See `python3 run.py -h` for detailed options.
 ```
-$ python3 run.py [PATH/TO/VIDEO_DIR/VIDEO] --codec h264
+python3 run.py [PATH/TO/VIDEO_DIR/VIDEO] --codec h264
 ```
 
 Using USB webcam, using `--media` argument, path to USB webcam.  
 ```
-$ pyhon3 run.py [PATH/TO/WEBCAM] --media v4l2 
+pyhon3 run.py [PATH/TO/WEBCAM] --media v4l2 
 ```
 ### Without Kibana
 Only Draw the bounding box, gender and age on the display.
