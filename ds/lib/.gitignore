@@ -1,0 +1,4 @@
+**/*.o
+**/*.so
+gazeinfer/deepstream_tao_apps/
+gazeinfer/deepstream_python_apps/

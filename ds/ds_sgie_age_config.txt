@@ -60,30 +60,30 @@
 [property]
 gpu-id=0
 net-scale-factor=0.7
-model-engine-file=../model/age/age_megaasian.onnx_b8_fp16.engine
+model-engine-file=../model/age/age.onnx_b32_gpu0_fp16.engine
+onnx-file=../model/age/age.onnx
 infer-dims=3;64;64
-#labelfile-path=age_labels.txt
+batch-size=32
 process-mode=2
 # 0:detection 1:classification 100:other
 network-type=1
 network-mode=2
-#num-detected-classes=0
 input-object-min-width=0
 input-object-min-height=0
 input-object-max-width=0
 input-object-max-height=0
 maintain-aspect-ratio=1
-secondary-reinfer-interval=5
+secondary-reinfer-interval=10
 gie-unique-id=2
 operate-on-gie-id=-1
 output-blob-names=pred_a
 classifier-async-mode=0
-#output-tensor-meta=1
+output-tensor-meta=0
 enable-dla=0
 classifier-threshold=0.
 #scaling-filter=0
 #scaling-compute-hw=0
-custom-lib-path=libcustomparser.so
+custom-lib-path=lib/libcustomparser.so
 parse-classifier-func-name=NvDsInferClassifierParseAge
 
 [class-attrs-all]

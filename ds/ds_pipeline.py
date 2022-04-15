@@ -3,20 +3,24 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import GObject, Gst
 
-Gst.debug_set_active(True)
-Gst.debug_set_default_threshold(Gst.DebugLevel.WARNING)
-GObject.threads_init()
 Gst.init(None)
+Gst.debug_set_active(True)
+#Gst.debug_set_default_threshold(Gst.DebugLevel.WARNING)
+GObject.threads_init()
 
 import pyds
 import numpy as np
 import configparser
 import threading
-import torch
+import traceback
+import ctypes
 
 sys.path.append("ds")
+import lib.dscprobes
 
 pipeline_playing = False
+pipeline_alive = False
+last_sample = None
 
 GIE_ID_DETECT = 1
 GIE_ID_AGE = 2
@@ -46,14 +50,13 @@ elem_props = {
         "live-source": 1
     },
     "pgie": {
-        "config-file-path": "ds/ds_pgie_config.txt"
+        "config-file-path": "ds/ds_pgie_facedetect_config.txt"
     },
     "tracker": {
         "tracker-width": 640,
         "tracker-height": 384,
         "gpu-id": 0,
-#        "ll-lib-file": "/opt/nvidia/deepstream/deepstream/lib/libnvds_mot_klt.so",
-        "ll-lib-file": "/opt/nvidia/deepstream/deepstream-5.0/lib/libnvds_nvdcf.so",
+        "ll-lib-file": "/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so",
         "ll-config-file": "ds/tracker_config.yml",
         "enable-batch-process": 1
     },
@@ -63,13 +66,26 @@ elem_props = {
     "sgie2": {
         "config-file-path": "ds/ds_sgie_gender_config.txt"
     },
+    "sgie3": {
+        "config-file-path": "ds/ds_sgie_faciallandmarks_config.txt"
+    },
+    "tgie": {
+        "customlib-name": "ds/libnvds_gazeinfer.so",
+        "customlib-props": "config-file:ds/gazenet_config.txt"
+    },
+    "filter2": {
+        "caps": "video/x-raw, format={form}, width={w}, height={h}, framerate={fps}/1"
+    },
+    "filter3": {
+        "caps": "video/x-raw, format={form}"
+    },
     "sink": {
-#        "emit-signals": True,
+        "emit-signals": True,
         "caps": "video/x-raw, format={form}, width={w}, height={h}, framerate={fps}/1",
-        "drop": True,
-        "max-buffers": 1,
-        "sync": True,
-#        "async": True
+#        "drop": True,
+#        "max-buffers": 0,
+#        "sync": True,
+#        "async": False
     }
 }
 
@@ -105,9 +121,11 @@ class DsVideo:
                 elem_props["v4l2filter"]["caps"] = elem_props["v4l2filter"]["caps"].format(cap="image/jpeg", w=width, h=height, fps=fps)
             else:
                 elem_props["v4l2filter"]["caps"] = elem_props["v4l2filter"]["caps"].format(cap="video/x-raw", w=width, h=height, fps=fps)
+        elem_props["filter1"]["caps"] = elem_props["filter1"]["caps"].format(fps=fps)
+        elem_props["filter2"]["caps"] = elem_props["filter2"]["caps"].format(w=width, h=height, form="RGBA", fps=fps)
+        elem_props["filter3"]["caps"] = elem_props["filter3"]["caps"].format(form="BGR")
         elem_props["sink"]["caps"] = elem_props["sink"]["caps"].format(w=width, h=height, form=format, fps=fps)
-        elem_props["filter1"]["caps"] = (elem_props["filter1"]["caps"].format(fps=fps))
-        print("DeepStream pipeline properties: ", elem_props)
+        print("[DEBUG] DeepStream pipeline properties: ", elem_props)
 
         #
         # Create gstreamer elements
@@ -135,22 +153,40 @@ class DsVideo:
         else:
             print("Error: Media format [%s] is not supported" % media, file=sys.stderr)
         queue2 = create_element(self.pipeline, "queue", "decode-queue")
-        nvvidconv1 = create_element(self.pipeline, "nvvideoconvert", "nvconv-for-streammux")
-        filter1 = create_element(self.pipeline, "capsfilter", "nvvidconv1-caps", elem_props["filter1"])
+        nvconv1 = create_element(self.pipeline, "nvvideoconvert", "nvconv-for-streammux")
+        filter1 = create_element(self.pipeline, "capsfilter", "caps-for-nvconv1", elem_props["filter1"])
         streammux = create_element(self.pipeline, "nvstreammux", "stream-muxer", elem_props["streammux"])
         pgie = create_element(self.pipeline, "nvinfer", "primary-gie", elem_props["pgie"])
         tracker = create_element(self.pipeline, "nvtracker", "tracker", elem_props["tracker"])
         sgie1 = create_element(self.pipeline, "nvinfer", "sgie-age", elem_props["sgie1"])
         sgie2 = create_element(self.pipeline, "nvinfer", "sgie-gender", elem_props["sgie2"])
-        nvvidconv2 = create_element(self.pipeline, "nvvideoconvert", "nvconv-for-sink")
-        videoconv1 = create_element(self.pipeline, "videoconvert", "videoconv-for-sink")
+        sgie3 = create_element(self.pipeline, "nvinfer", "sgie-fpe", elem_props["sgie3"])
+        tgie = create_element(self.pipeline, "nvdsvideotemplate", "tgie-gaze", elem_props["tgie"])
+        nvtile = create_element(self.pipeline, "nvmultistreamtiler", "nvtile")
+        nvconv2 = create_element(self.pipeline, "nvvideoconvert", "nvconv-for-sink")
+        filter2 = create_element(self.pipeline, "capsfilter", "caps-for-nvconv2", elem_props["filter2"])
+        vidconv = create_element(self.pipeline, "videoconvert", "videoconv-for-sink")
+        filter3 = create_element(self.pipeline, "capsfilter", "caps-for-sink", elem_props["filter3"])
         self.sink = create_element(self.pipeline, "appsink", "appsink", elem_props["sink"])
+        self.sink.connect("new-sample", new_sample_callback, None)
+
+        # set pad buffer probe callbacks
+        tmp_pad = pgie.get_static_pad('src')
+        tmp_pad.add_probe(Gst.PadProbeType.BUFFER, pgie_pad_buffer_probe, None)
+        tmp_pad = sgie3.get_static_pad('src')
+        tmp_pad.add_probe(Gst.PadProbeType.BUFFER, sgie3_pad_buffer_probe, None)
+        tmp_pad = nvtile.get_static_pad('sink')
+        tmp_pad.add_probe(Gst.PadProbeType.BUFFER, nvtile_pad_buffer_probe, None)
+
+        # init fpe postprocess for buffer probe
+        dscprobes.init_fpe_postprocess(num=80, max_bsize=32, in_width=80, in_height=80)
 
         #
         # Link elements each other
         # For example with h264 video source:
         #   source -> demux -> queue -> h264parse -> decode -> queue -> conv -> caps
-        #   -> streammux -> pgie -> tracker -> sgie1 -> sgie2 -> conv -> conv -> sink
+        #   -> streammux -> pgie -> tracker -> sgie1 -> sgie2 -> sgie3 -> tgie
+        #   -> conv -> vidconv -> sink
         #
         # * demuxer
         # it will be linked with queue1 dynamic because the source pads of
@@ -162,23 +198,26 @@ class DsVideo:
         # previous element(filter1) explicitly.
         #
         if media == "video":
+
             source.link(demuxer)
 
             def handle_demux_pad_added(src, new_pad, *args, **kwargs):
                 if new_pad.get_name().startswith('video'):
+                    queue1 = self.pipeline.get_by_name('demux-queue')
                     queue_sink_pad = queue1.get_static_pad('sink')
                     new_pad.link(queue_sink_pad)
             demuxer.connect("pad-added", handle_demux_pad_added)
 
             queue1.link(decparser)
             decparser.link(decoder)
+
         elif media == "v4l2":
             source.link(v4l2filter)
             v4l2filter.link(decoder)
 
         decoder.link(queue2)
-        queue2.link(nvvidconv1)
-        nvvidconv1.link(filter1)
+        queue2.link(nvconv1)
+        nvconv1.link(filter1)
 
         streammux_sinkpad = streammux.get_request_pad("sink_0")
         filter1_srcpad = filter1.get_static_pad("src")
@@ -188,10 +227,15 @@ class DsVideo:
         pgie.link(tracker)
         tracker.link(sgie1)
         sgie1.link(sgie2)
-        sgie2.link(nvvidconv2)
-        nvvidconv2.link(videoconv1)
+        sgie2.link(sgie3)
+        sgie3.link(tgie)
+        tgie.link(nvtile)
+        nvtile.link(nvconv2)
+        nvconv2.link(filter2)
+        filter2.link(vidconv)
+        vidconv.link(filter3)
 
-        videoconv1.link(self.sink)
+        filter3.link(self.sink)
 
         # Create an event loop and feed gstreamer bus messages to it
         self.loop = GObject.MainLoop()
@@ -207,17 +251,28 @@ class DsVideo:
 
     def _run(self):
         try:
+            global pipeline_alive
+            pipeline_alive = True
             self.loop.run()
         except:
-            pass
-        global pipeline_playing
-        pipeline_playing = False
+            print("Error: ", sys.exc_info()[0], file=sys.stderr)
+        # Shutdown the gstreamer pipeline and thread
+        #self.pipeline.set_state(Gst.State.PAUSED)
+        print("Info: Gst thread is done", file=sys.stderr)
 
     def start(self):
         # start play back and listen to events
-        self.pipeline.set_state(Gst.State.PLAYING)
-        global pipeline_playing
-        pipeline_playing = True
+        if self.run_thread.is_alive():
+            ret = self.pipeline.set_state(Gst.State.PLAYING)
+            if ret == Gst.StateChangeReturn.FAILURE:
+                print("Error: Failed to set the pipeline state playing")
+                return False
+            global pipeline_playing
+            pipeline_playing = True
+        else:
+            print("Error: gst pipeline cannot start because gst thread is not alive", file=sys.stderr)
+
+        return True
 
     def stop(self):
         if self.run_thread.is_alive():
@@ -226,37 +281,53 @@ class DsVideo:
         pipeline_playing = False
 
     def is_alive(self):
-        return self.run_thread.is_alive()
+        if self.run_thread.is_alive():
+            return pipeline_alive
+        return False
 
     def is_playing(self):
         if not self.run_thread.is_alive():
             return False
+        if self.pipeline.get_state(Gst.CLOCK_TIME_NONE)[1] != Gst.State.PLAYING:
+            global pipeline_playing
+            pipeline_playing = False
         return pipeline_playing
 
-    def quit(self):
-        # Shutdown the gstreamer pipeline and thread
-        self.pipeline.set_state(Gst.State.PAUSED)
-        pyds.unset_callback_funcs()
+    def _quit(self):
         self.pipeline.set_state(Gst.State.NULL)
-        self.loop.quit()
-        self.run_thread.join()
-        global pipeline_playing
+        global pipeline_playing, pipeline_alive
         pipeline_playing = False
+        pipeline_alive = False
+        pyds.unset_callback_funcs()
+        self.pipeline.unref()
+        self.loop.quit()
+
+    def quit(self):
+        self.loop.quit()
+        if self.run_thread.is_alive():
+            self.run_thread.join()
+        global pipeline_playing, pipeline_alive
+        pipeline_playing = False
+        pipeline_alive = False
 
     def read(self):
         image = None
         faces = []
 
         # Check gstreamer pipeline health
-        if not self.run_thread.is_alive():
+        if not self.is_alive():
             print("Error: Failed to read a frame data because gst thread is done already", file=sys.stderr)
             return image, faces
-        if not pipeline_playing:
+        if not self.is_playing():
             print("Error: Failed to read a frame data because gst pipeline is stopped", file=sys.stderr)
             return image, faces
 
         # Pull new buffer from appsink
-        sample = self.sink.emit('try-pull-sample', 5000000000)
+        global last_sample
+        sample = last_sample
+        if self.sink.props.eos:
+            print("Error: end of stream", file=sys.stderr)
+            raise Exception("end of stream")
         if sample is None:
             print("Error: Failed to read a frame data from gst pipeline", file=sys.stderr)
             return image, faces
@@ -278,6 +349,9 @@ class DsVideo:
         # classify_meta : NvDsClassifierMeta metadata from sgie (result of classifications)
         #
         batch_meta = pyds.gst_buffer_get_nvds_batch_meta(hash(new_buffer))
+        if batch_meta is None:
+            print("Error: batch meta data is not found in the buffer")
+            return image, faces
         l_frame = batch_meta.frame_meta_list
         while l_frame is not None:
             try:
@@ -294,6 +368,7 @@ class DsVideo:
 
                 face = {}
                 rect = {}
+                gaze = {}
 
                 # Pack the result data from DeepStream
                 rect["left"] = int(obj_meta.rect_params.left)
@@ -330,6 +405,23 @@ class DsVideo:
                     except StopIteration:
                         break
 
+                l_user = obj_meta.obj_user_meta_list
+                while l_user is not None:
+                    try:
+                        user_meta = pyds.NvDsUserMeta.cast(l_user.data)
+                    except StopIteration:
+                        break
+
+                    if user_meta.base_meta.meta_type == \
+                       pyds.nvds_get_user_meta_type("NVIDIA.RIVA.USER_META_GAZE"):
+                        gaze = dscprobes.get_gaze_from_usermeta(user_meta.user_meta_data)
+
+                    try:
+                        l_user = l_user.next
+                    except StopIteration:
+                        break
+
+                face["gaze"] = gaze
                 faces.append(face)
 
                 try:
@@ -340,35 +432,56 @@ class DsVideo:
                 l_frame = l_frame.next
             except StopIteration:
                 break
+            except:
+                traceback.print_exc()
 
         return image, faces
 
 
     def __del__(self):
-        self.pipeline.set_state(Gst.State.PAUSED)
-        pyds.unset_callback_funcs()
-        self.pipeline.set_state(Gst.State.NULL)
-        self.loop.quit()
-        self.run_thread.join()
-        global pipeline_playing
-        pipeline_playing = False
+        self.quit()
 
 
 # Callback function called from bus message event
 def bus_msg_callback_loop(bus, message, dsvideo):
+    global pipeline_alive
     if message.type == Gst.MessageType.EOS:
         print("Info: End of stream")
         if dsvideo.is_loopback:
             dsvideo.pipeline.seek(1.0, Gst.Format.TIME, Gst.SeekFlags.SEGMENT, Gst.SeekType.SET, 0, Gst.SeekType.NONE, 0)
         else:
-            dsvideo.loop.quit()
+            pipeline_alive = False
+            dsvideo._quit()
     elif message.type == Gst.MessageType.WARNING:
         err, debug = message.parse_warning()
         print("Warning: %s: %s" % (err, debug), file=sys.stderr)
-        dsvideo.loop.quit()
+        pipeline_alive = False
+        dsvideo._quit()
     elif message.type == Gst.MessageType.ERROR:
-        err, debug = message.parse_warning()
-        print("Error: %s: %s\n" % (err, debug), file=sys.stderr)
-        dsvideo.loop.quit()
+        err, debug = message.parse_error()
+        print("Error: %s: %s" % (err, debug), file=sys.stderr)
+        pipeline_alive = False
+        dsvideo._quit()
     return True
 
+# Callback function called from appsink for new-sample event
+def new_sample_callback(sink, data):
+    global last_sample
+    last_sample = sink.emit("pull-sample")
+    #print("[DEBUG] Timestamp: ", last_sample.get_buffer().pts)
+    return Gst.FlowReturn.OK
+
+# Callback function for pgie(face detection) buffer probe
+def pgie_pad_buffer_probe(pad, info, udata):
+    dscprobes.facenet_pad_buffer_probe(pad, info, udata)
+    return Gst.PadProbeReturn.OK
+
+# Callback function for sgie3(faciallandmark) buffer probe
+def sgie3_pad_buffer_probe(pad, info, udata):
+    dscprobes.fpenet_pad_buffer_probe(pad, info, udata)
+    return Gst.PadProbeReturn.OK
+
+# Callback function for nvtile(nvmultistreamtiler) buffer probe
+def nvtile_pad_buffer_probe(pad, info, udata):
+    dscprobes.nvtile_pad_buffer_probe(pad, info, udata)
+    return Gst.PadProbeReturn.OK

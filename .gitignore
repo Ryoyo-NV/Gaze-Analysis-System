@@ -1,0 +1,7 @@
+azure_config.ini.*
+**/__pycache__/
+model/face/*
+model/faciallandmarks/*
+model/gaze/*
+model/age/*.engine
+model/gender/*.engine
