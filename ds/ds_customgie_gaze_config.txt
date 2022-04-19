@@ -1,2 +1,0 @@
-customlib-name=lib/libnvds_gazeinfer.so
-customlib-props=config-file:gazenet_config.txt

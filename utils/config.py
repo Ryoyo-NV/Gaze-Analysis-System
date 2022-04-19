@@ -10,7 +10,7 @@ import configparser
 class Config:
     """User configuration"""
 
-    FILE_PATH_STR = "../azure_config.ini"     # Config file path
+    FILE_PATH_STR = "azure_config.ini"     # Config file path
     # Config properties
     HOST_NAME = "host_name"
     DEVICE_ID = "device_id"

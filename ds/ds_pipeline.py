@@ -16,7 +16,8 @@ import traceback
 import ctypes
 
 sys.path.append("ds")
-import lib.dscprobes
+sys.path.append("ds/lib")
+import dscprobes
 
 pipeline_playing = False
 pipeline_alive = False
@@ -70,8 +71,8 @@ elem_props = {
         "config-file-path": "ds/ds_sgie_faciallandmarks_config.txt"
     },
     "tgie": {
-        "customlib-name": "ds/libnvds_gazeinfer.so",
-        "customlib-props": "config-file:ds/gazenet_config.txt"
+        "customlib-name": "ds/lib/libnvds_gazeinfer.so",
+        "customlib-props": "config-file:ds/lib/gazenet_config.txt"
     },
     "filter2": {
         "caps": "video/x-raw, format={form}, width={w}, height={h}, framerate={fps}/1"
@@ -325,7 +326,7 @@ class DsVideo:
         # Pull new buffer from appsink
         global last_sample
         sample = last_sample
-        if self.sink.props.eos:
+        if (self.sink.props.eos and not(self.is_loopback)):
             print("Error: end of stream", file=sys.stderr)
             raise Exception("end of stream")
         if sample is None:
