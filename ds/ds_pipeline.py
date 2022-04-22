@@ -248,6 +248,7 @@ class DsVideo:
         self.pipeline.set_state(Gst.State.PAUSED)
 
         self.run_thread = threading.Thread(target=self._run)
+        self.run_thread.setDaemon(True)
         self.run_thread.start()
 
     def _run(self):

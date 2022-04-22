@@ -7,12 +7,13 @@ sys.path.insert(0, '/*')
 import math
 import queue
 import time
-import threading
+import datetime
 import send_message as sm
 import config as cf
 from os import path
 from timeit import default_timer as timer
 from enum import Enum, auto
+from concurrent.futures import ThreadPoolExecutor
 
 class State(Enum):
     IDLE = auto()
@@ -36,7 +37,10 @@ class MessageManager(sm.MessageSender):
 
         __user_config = None                    # Holds the user configuration instance
 
-        MAX_SEND_RETRY = 5
+        __sender_pool = None
+
+        MAX_SEND_RETRY = 1
+        TIMEOUT_SEND_RETRY = 5.
 
         # function __init__()
         # Description: class constructor
@@ -66,7 +70,10 @@ class MessageManager(sm.MessageSender):
 
                         self.__state = State.IDLE
 
+                        self.__sender_pool = ThreadPoolExecutor(max_workers=5)
+
                         self.MAX_SEND_RETRY = config.MAX_SEND_RETRY
+                        self.TIMEOUT_SEND_RETRY = config.TIMEOUT_SEND_RETRY
 
         # function add()
         # Description: Function that message received are added to message stack pool. FIFO is followed.
@@ -128,8 +135,7 @@ class MessageManager(sm.MessageSender):
                 for message in self.__queue_copy:
 
                         # Execute each thread per alert
-                        x = threading.Thread(target=self.send, args=(message,))
-                        x.start()
+                        self.__sender_pool.submit(self.send, message)
 
         # function send()
         # Description: Function to call send_message function to send message
@@ -143,6 +149,8 @@ class MessageManager(sm.MessageSender):
 
                 # get message details
                 num = 0         # number of attempt to send message to IoT Hub
+
+                time_start = datetime.datetime.now()
 
                 print("===============================================================") 
                 print("Send Message:", message)
@@ -167,7 +175,10 @@ class MessageManager(sm.MessageSender):
                                 is_client_iothub_ok = False
                                 print("Message sending failed!")
 
-                                
+                        if (datetime.datetime.now() - time_start).total_seconds() >= self.TIMEOUT_SEND_RETRY:
+                                print("Message sending timed out")
+                                break
+
 
         # function is_client_iothub_ok()
         # Description: Function that return the status of iothub client connection

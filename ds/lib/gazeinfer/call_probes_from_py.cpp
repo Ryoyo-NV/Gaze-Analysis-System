@@ -225,7 +225,8 @@ pgie_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info, gpointer u_data)
       if(center_x < (square_size/2.0) || center_y < square_size/2.0 ||
           center_x + square_size/2.0 > frame_width ||
           center_y - square_size/2.0 > frame_height) {
-              g_print("Keep the original bbox\n");
+              //g_print("Keep the original bbox\n");
+	      continue;
       } else {
           obj_meta->rect_params.left = center_x - square_size/2.0;
           obj_meta->rect_params.top = center_y - square_size/2.0;

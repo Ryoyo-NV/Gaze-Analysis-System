@@ -11,6 +11,8 @@ class MessageSender:
 
     image_path = None                   # Holds the image for mobile alert message
 
+    client = None
+
     def __init__(self, config):
 
         # Set user configurations
@@ -23,7 +25,8 @@ class MessageSender:
         """create an iot hub client"""
         try:
             #create client from connection string
-            client = IoTHubDeviceClient.create_from_connection_string(self.__conf_iothub_connection_str)
+            if self.client is None:
+                self.client = IoTHubDeviceClient.create_from_connection_string(self.__conf_iothub_connection_str)
             
         except Exception as ex:
             print("Unexpected error in connecting to client{0}".format(ex))
@@ -31,7 +34,7 @@ class MessageSender:
             result = None
 
         else:
-            result = client
+            result = self.client
         finally:
             pass
 

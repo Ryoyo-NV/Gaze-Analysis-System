@@ -16,7 +16,8 @@ class Config:
     DEVICE_ID = "device_id"
     SHARED_ACCESS_KEY = "shared_access_key"
 
-    MAX_SEND_RETRY = 5
+    MAX_SEND_RETRY = 1
+    TIMEOUT_SEND_RETRY = 5.
 
 
     # function __init__
@@ -77,9 +78,16 @@ class Config:
             pass
 
         try:
-            self.MAX_SEND_RETRY = config.get('iot_hub_client_setting', "MAX_SEND_RETRY")
+            self.MAX_SEND_RETRY = config.getint('iot_hub_client_setting', "max_send_retry")
         except:
-            pass
+            print("[ERROR] Config set for MAX_SEND_RETRY is invalid! Default {} is used."\
+                .format(self.MAX_SEND_RETRY))
+ 
+        try:
+            self.TIMEOUT_SEND_RETRY = config.getfloat('iot_hub_client_setting', "timeout_send_retry")
+        except:
+            print("[ERROR] Config set for TIMEOUT_SEND_RETRY is invalid! Default {} is used."\
+                .format(self.TIMEOUT_SEND_RETRY))
  
         ############################################################################################
         
