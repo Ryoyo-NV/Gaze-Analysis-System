@@ -38,7 +38,7 @@ elem_props = {
         "caps": "{cap}, width={w}, height={h}, framerate={fps}/1, parsed=True",
     },
     "v4l2jpgdec": {
-        "mjpeg": 1
+        "mjpeg": True
     },
     "filter1": {
         "caps": "video/x-raw(memory:NVMM), width=1280, height=720, format=NV12, framerate={fps}/1"
@@ -48,7 +48,8 @@ elem_props = {
         "height": 720,
         "batch-size": 1,
         "batched-push-timeout": 4000000,
-        "live-source": 1
+        "live-source": False,
+        "frame-num-reset-on-eos": True
     },
     "pgie": {
         "config-file-path": "ds/ds_pgie_facedetect_config.txt"
@@ -59,7 +60,7 @@ elem_props = {
         "gpu-id": 0,
         "ll-lib-file": "/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so",
         "ll-config-file": "ds/tracker_config.yml",
-        "enable-batch-process": 1
+        "enable-batch-process": True
     },
     "sgie1": {
         "config-file-path": "ds/ds_sgie_age_config.txt"
@@ -147,6 +148,7 @@ class DsVideo:
         elif media == "v4l2":
             source = create_element(self.pipeline, "v4l2src", "v4l2-source", elem_props["v4l2src"])
             v4l2filter = create_element(self.pipeline, "capsfilter", "v4l2-caps", elem_props["v4l2filter"])
+            queue1 = create_element(self.pipeline, "queue", "camera-queue")
             if codec == "mjpg":
                 decoder = create_element(self.pipeline, "nvv4l2decoder", "jpegdecoder", elem_props["v4l2jpgdec"])
             else:
@@ -214,7 +216,8 @@ class DsVideo:
 
         elif media == "v4l2":
             source.link(v4l2filter)
-            v4l2filter.link(decoder)
+            v4l2filter.link(queue1)
+            queue1.link(decoder)
 
         decoder.link(queue2)
         queue2.link(nvconv1)
@@ -245,10 +248,7 @@ class DsVideo:
         bus.add_signal_watch()
         bus.connect("message", bus_msg_callback_loop, self)
 
-        self.pipeline.set_state(Gst.State.PAUSED)
-
-        self.run_thread = threading.Thread(target=self._run)
-        self.run_thread.setDaemon(True)
+        self.run_thread = threading.Thread(target=self._run, daemon=True)
         self.run_thread.start()
 
     def _run(self):
@@ -258,14 +258,13 @@ class DsVideo:
             self.loop.run()
         except:
             print("Error: ", sys.exc_info()[0], file=sys.stderr)
-        # Shutdown the gstreamer pipeline and thread
-        #self.pipeline.set_state(Gst.State.PAUSED)
         print("Info: Gst thread is done", file=sys.stderr)
 
     def start(self):
         # start play back and listen to events
         if self.run_thread.is_alive():
             ret = self.pipeline.set_state(Gst.State.PLAYING)
+            self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
             if ret == Gst.StateChangeReturn.FAILURE:
                 print("Error: Failed to set the pipeline state playing")
                 return False
@@ -290,9 +289,6 @@ class DsVideo:
     def is_playing(self):
         if not self.run_thread.is_alive():
             return False
-        if self.pipeline.get_state(Gst.CLOCK_TIME_NONE)[1] != Gst.State.PLAYING:
-            global pipeline_playing
-            pipeline_playing = False
         return pipeline_playing
 
     def _quit(self):
@@ -447,10 +443,21 @@ class DsVideo:
 # Callback function called from bus message event
 def bus_msg_callback_loop(bus, message, dsvideo):
     global pipeline_alive
-    if message.type == Gst.MessageType.EOS:
+    if message.type == Gst.MessageType.ASYNC_DONE:
+        pass
+    elif message.type == Gst.MessageType.SEGMENT_DONE:
+        print("Info: Stream segment done")
+        if dsvideo.is_loopback:
+            # seeking not worked
+            print("Info: Seeking stream...")
+            dsvideo.pipeline.set_state(Gst.State.PAUSED)
+            dsvideo.pipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.SEGMENT | Gst.SeekFlags.KEY_UNIT, 0)
+            dsvideo.pipeline.set_state(Gst.State.PLAYING)
+            dsvideo.pipeline.get_state(Gst.CLOCK_TIME_NONE)
+    elif message.type == Gst.MessageType.EOS:
         print("Info: End of stream")
         if dsvideo.is_loopback:
-            dsvideo.pipeline.seek(1.0, Gst.Format.TIME, Gst.SeekFlags.SEGMENT, Gst.SeekType.SET, 0, Gst.SeekType.NONE, 0)
+            pass
         else:
             pipeline_alive = False
             dsvideo._quit()
@@ -470,7 +477,6 @@ def bus_msg_callback_loop(bus, message, dsvideo):
 def new_sample_callback(sink, data):
     global last_sample
     last_sample = sink.emit("pull-sample")
-    #print("[DEBUG] Timestamp: ", last_sample.get_buffer().pts)
     return Gst.FlowReturn.OK
 
 # Callback function for pgie(face detection) buffer probe
