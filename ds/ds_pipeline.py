@@ -22,6 +22,9 @@ import dscprobes
 pipeline_playing = False
 pipeline_alive = False
 last_sample = None
+seek_event = threading.Event()
+accumulated_base = 0
+prev_accumulated_base = 0
 
 GIE_ID_DETECT = 1
 GIE_ID_AGE = 2
@@ -38,7 +41,7 @@ elem_props = {
         "caps": "{cap}, width={w}, height={h}, framerate={fps}/1, parsed=True",
     },
     "v4l2jpgdec": {
-        "mjpeg": True
+        "mjpeg": 1
     },
     "filter1": {
         "caps": "video/x-raw(memory:NVMM), width=1280, height=720, format=NV12, framerate={fps}/1"
@@ -60,7 +63,7 @@ elem_props = {
         "gpu-id": 0,
         "ll-lib-file": "/opt/nvidia/deepstream/deepstream/lib/libnvds_nvmultiobjecttracker.so",
         "ll-config-file": "ds/tracker_config.yml",
-        "enable-batch-process": True
+        "enable-batch-process": 1
     },
     "sgie1": {
         "config-file-path": "ds/ds_sgie_age_config.txt"
@@ -135,8 +138,9 @@ class DsVideo:
         # decparser: h264parse or h265parse
         # 
         if media == "video":
-            source = create_element(self.pipeline, "filesrc", "file-source", elem_props["filesrc"])
-            demuxer = create_element(self.pipeline, "qtdemux", "qtdemux")
+            source = create_element(self.pipeline, "uridecodebin", "urisrc", {"uri":"file:///home/ryoyo/gaze_video.mp4"})
+            #source = create_element(self.pipeline, "filesrc", "file-source", elem_props["filesrc"])
+            #demuxer = create_element(self.pipeline, "qtdemux", "qtdemux")
             queue1 = create_element(self.pipeline, "queue", "demux-queue")
             if codec == "h264":
                 decparser = create_element(self.pipeline, "h264parse", "h264parser")
@@ -144,18 +148,17 @@ class DsVideo:
                 decparser = create_element(self.pipeline, "h265parse", "h265parser")
             else:
                 print("Error: Video codec [%s] is not supported" % codec, file=sys.stderr)
-            decoder = create_element(self.pipeline, "nvv4l2decoder", "decoder")
+            #decoder = create_element(self.pipeline, "nvv4l2decoder", "decoder")
         elif media == "v4l2":
             source = create_element(self.pipeline, "v4l2src", "v4l2-source", elem_props["v4l2src"])
             v4l2filter = create_element(self.pipeline, "capsfilter", "v4l2-caps", elem_props["v4l2filter"])
-            queue1 = create_element(self.pipeline, "queue", "camera-queue")
             if codec == "mjpg":
                 decoder = create_element(self.pipeline, "nvv4l2decoder", "jpegdecoder", elem_props["v4l2jpgdec"])
             else:
                 decoder = create_element(self.pipeline, "videoconvert", "videoconv-for-v4l2")
         else:
             print("Error: Media format [%s] is not supported" % media, file=sys.stderr)
-        queue2 = create_element(self.pipeline, "queue", "decode-queue")
+        #queue2 = create_element(self.pipeline, "queue", "decode-queue")
         nvconv1 = create_element(self.pipeline, "nvvideoconvert", "nvconv-for-streammux")
         filter1 = create_element(self.pipeline, "capsfilter", "caps-for-nvconv1", elem_props["filter1"])
         streammux = create_element(self.pipeline, "nvstreammux", "stream-muxer", elem_props["streammux"])
@@ -180,6 +183,10 @@ class DsVideo:
         tmp_pad.add_probe(Gst.PadProbeType.BUFFER, sgie3_pad_buffer_probe, None)
         tmp_pad = nvtile.get_static_pad('sink')
         tmp_pad.add_probe(Gst.PadProbeType.BUFFER, nvtile_pad_buffer_probe, None)
+        if media == "video" and is_loopback == True:
+            tmp_pad = queue1.get_static_pad('sink')
+            tmp_pad.add_probe(Gst.PadProbeType.EVENT_BOTH | Gst.PadProbeType.EVENT_FLUSH, seek_stream_event, None)
+            tmp_pad.add_probe(Gst.PadProbeType.BUFFER, seek_stream_buffer_probe, None)
 
         # init fpe postprocess for buffer probe
         dscprobes.init_fpe_postprocess(num=80, max_bsize=32, in_width=80, in_height=80)
@@ -202,25 +209,27 @@ class DsVideo:
         #
         if media == "video":
 
-            source.link(demuxer)
+            #source.link(demuxer)
 
             def handle_demux_pad_added(src, new_pad, *args, **kwargs):
-                if new_pad.get_name().startswith('video'):
+                #if new_pad.get_name().startswith('video'):
+                if new_pad.get_name().startswith('src'):
                     queue1 = self.pipeline.get_by_name('demux-queue')
                     queue_sink_pad = queue1.get_static_pad('sink')
                     new_pad.link(queue_sink_pad)
-            demuxer.connect("pad-added", handle_demux_pad_added)
+            #demuxer.connect("pad-added", handle_demux_pad_added)
+            source.connect("pad-added", handle_demux_pad_added)
 
-            queue1.link(decparser)
-            decparser.link(decoder)
+            queue1.link(nvconv1)#test
+            #queue1.link(decparser)
+            #decparser.link(decoder)
 
         elif media == "v4l2":
             source.link(v4l2filter)
-            v4l2filter.link(queue1)
-            queue1.link(decoder)
+            v4l2filter.link(decoder)
 
-        decoder.link(queue2)
-        queue2.link(nvconv1)
+        #decoder.link(queue2)
+        #queue2.link(nvconv1)
         nvconv1.link(filter1)
 
         streammux_sinkpad = streammux.get_request_pad("sink_0")
@@ -245,11 +254,19 @@ class DsVideo:
         self.loop = GObject.MainLoop()
         self.is_loopback = is_loopback
         bus = self.pipeline.get_bus()
-        bus.add_signal_watch()
         bus.connect("message", bus_msg_callback_loop, self)
+        bus.add_signal_watch()
 
         self.run_thread = threading.Thread(target=self._run, daemon=True)
         self.run_thread.start()
+
+        #self.pipeline.set_state(Gst.State.PAUSED)
+
+        if media == "video" and is_loopback == True:
+            #seek_event = threading.Event()
+            _, self.duration = self.pipeline.query_duration(Gst.Format.TIME)
+            self.seek_thread = threading.Thread(target=self._seek, daemon=True)
+            self.seek_thread.start()
 
     def _run(self):
         try:
@@ -258,7 +275,27 @@ class DsVideo:
             self.loop.run()
         except:
             print("Error: ", sys.exc_info()[0], file=sys.stderr)
+        # Shutdown the gstreamer pipeline and thread
+        #self.pipeline.set_state(Gst.State.PAUSED)
         print("Info: Gst thread is done", file=sys.stderr)
+
+    def _seek(self):
+        offset = 0
+        src = self.pipeline.get_by_name('urisrc')
+        #queue = self.pipeline.get_by_name('demux-queue')
+        #qpad = queue.get_static_pad('sink')
+        while True:
+            seek_event.wait()
+
+            print("Info: Seeking stream...", file=sys.stderr)
+            self.pipeline.set_state(Gst.State.PAUSED)
+            src.seek(1.0, Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.KEY_UNIT, Gst.SeekType.SET, 0, Gst.SeekType.NONE, 0)
+            self.pipeline.set_state(Gst.State.PLAYING)
+            self.pipeline.get_state(Gst.CLOCK_TIME_NONE)
+            #offset += self.duration
+            #qpad.set_offset(offset)
+
+            seek_event.clear()
 
     def start(self):
         # start play back and listen to events
@@ -448,10 +485,10 @@ def bus_msg_callback_loop(bus, message, dsvideo):
     elif message.type == Gst.MessageType.SEGMENT_DONE:
         print("Info: Stream segment done")
         if dsvideo.is_loopback:
-            # seeking not worked
             print("Info: Seeking stream...")
             dsvideo.pipeline.set_state(Gst.State.PAUSED)
             dsvideo.pipeline.seek_simple(Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.SEGMENT | Gst.SeekFlags.KEY_UNIT, 0)
+            #dsvideo.pipeline.seek(1.0, Gst.Format.TIME, Gst.SeekFlags.FLUSH | Gst.SeekFlags.SEGMENT | Gst.SeekFlags.KEY_UNIT, Gst.SeekType.SET, 0, Gst.SeekType.NONE, 0)
             dsvideo.pipeline.set_state(Gst.State.PLAYING)
             dsvideo.pipeline.get_state(Gst.CLOCK_TIME_NONE)
     elif message.type == Gst.MessageType.EOS:
@@ -477,6 +514,7 @@ def bus_msg_callback_loop(bus, message, dsvideo):
 def new_sample_callback(sink, data):
     global last_sample
     last_sample = sink.emit("pull-sample")
+    #print("[DEBUG] Timestamp: ", last_sample.get_buffer().pts)
     return Gst.FlowReturn.OK
 
 # Callback function for pgie(face detection) buffer probe
@@ -492,4 +530,33 @@ def sgie3_pad_buffer_probe(pad, info, udata):
 # Callback function for nvtile(nvmultistreamtiler) buffer probe
 def nvtile_pad_buffer_probe(pad, info, udata):
     dscprobes.nvtile_pad_buffer_probe(pad, info, udata)
+    return Gst.PadProbeReturn.OK
+
+# Callback function for video looping
+def seek_stream_event(pad, info, udata):
+    event = info.get_event()
+    if event is not None:
+        if event.type == Gst.EventType.EOS:
+            print("[DEBUG] event EOS", file=sys.stderr)
+            seek_event.set()
+        if event.type == Gst.EventType.SEGMENT:
+            print("[DEBUG] event SEGMENT", file=sys.stderr)
+            global accumulated_base, prev_accumulated_base
+            seg = Gst.Segment.new()
+            event.copy_segment(seg)
+            seg.base = accumulated_base
+            prev_accumulated_base = accumulated_base
+            accumulated_base = seg.stop
+            event.new_segment(seg)
+        if event.type == Gst.EventType.SEGMENT_DONE:
+            print("[DEBUG] event SEGMENT_DONE", file=sys.stderr)
+        if event.type == Gst.EventType.FLUSH_START or event.type == Gst.EventType.FLUSH_STOP \
+                or event.type == Gst.EventType.EOS or event.type == Gst.EventType.QOS or event.type == Gst.EventType.SEGMENT:
+            print("[DEBUG] event dropped", file=sys.stderr)
+            return Gst.PadProbeReturn.DROP
+    return Gst.PadProbeReturn.OK
+
+def seek_stream_buffer_probe(pad, info, udata):
+    buf = info.get_buffer()
+    buf.pts += prev_accumulated_base
     return Gst.PadProbeReturn.OK
