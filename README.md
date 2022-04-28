@@ -64,6 +64,7 @@ See [NVIDIA DeepStream SDK Developer Guide](https://docs.nvidia.com/metropolis/d
 ```
 git clone https://github.com/Ryoyo-NV/Gaze-Analysis-System
 cd Gaze-Analysis-System
+chmod +x setup.sh
 ./setup.sh
 ```
 

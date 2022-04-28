@@ -1,7 +1,32 @@
 #!/bin/bash
+set -eu
+trap catch ERR
+trap finally EXIT
 
-GAZE_DIR=$(pwd)
 CUDA_VER=10.2
+GAZE_DIR=$(pwd)
+DEEPSTREAM_DIR=/opt/nvidia/deepstream/deepstream/
+WORKSPACE_SIZE=1500000000 
+TAO_CONVERTER_URI=https://developer.nvidia.com/jp46-20210820t231431z-001zip
+
+TEGRA_ID=`cat /sys/module/tegra_fuse/parameters/tegra_chip_id`
+
+function catch {
+	echo Setup failed. Please check error messages.
+}
+function finally {
+	echo exit.
+	cd $GAZE_DIR
+}
+
+# CHECK DEEPSTREAM INSTALATION
+echo Checking DeepStream installation...
+if [ ! -f $DEEPSTREAM_DIR/version ]; then 
+	echo Installing DeepStream SDK...
+	sudo apt install -y deepstream-*
+fi
+echo done.
+echo
 
 # INSTALL DEPENDENCIES
 echo Installing dependencies...
@@ -11,18 +36,27 @@ sudo apt install -y gstreamer1.0-tools gstreamer1.0-alsa gstreamer1.0-plugins-ba
 	python3-dev python-gi-dev python3-pip git libgirepository1.0-dev libcairo2-dev apt-transport-https\
        	ca-certificates cmake libjpeg-dev
 pip3 install Pillow azure-iot-device
+echo done.
+echo
 
 # BUILD PYDS (DEEPSTREAM PYTHON BINDINGS)
-echo Building pyds...
-cd $GAZE_DIR/ds/lib
-git clone https://github.com/NVIDIA-AI-IOT/deepstream_python_apps
-cd deepstream_python_apps/bindings/
-git submodule update --init
-mkdir build && cd build
-cmake ..  -DPYTHON_MAJOR_VERSION=3 -DPYTHON_MINOR_VERSION=6 -DPIP_PLATFORM=linux_aarch64 -DDS_PATH=/opt/nvidia/deepstream/deepstream
-make -j$(nproc)
-pip3 install ./pyds-*.whl
-cd $GAZE_DIR
+echo Checking pyds installation...
+PYDS_AUTHOR=`pip3 show pyds | grep -i author:`
+if [[ "$PYDS_AUTHOR" != *NVIDIA* ]]; then
+	echo Building pyds...
+	cd $GAZE_DIR/ds/lib
+	git clone https://github.com/NVIDIA-AI-IOT/deepstream_python_apps
+	cd deepstream_python_apps/bindings/
+	git submodule update --init
+	mkdir build && cd build
+	cmake ..  -DPYTHON_MAJOR_VERSION=3 -DPYTHON_MINOR_VERSION=6 -DPIP_PLATFORM=linux_aarch64 -DDS_PATH=$DEEPSTREAM_DIR
+	make -j$(nproc)
+	echo Installing pyds...
+	pip3 install ./pyds-*.whl
+	cd $GAZE_DIR
+fi
+echo done.
+echo
 
 # BUILD DS CLASSIFIER CUSTOM PARSER
 echo Building classification cutom parser library...
@@ -30,38 +64,100 @@ cd $GAZE_DIR/ds/lib/customparser
 env CUDA_VER=$CUDA_VER make
 cp libcustomparser.so $GAZE_DIR/ds/lib
 cd $GAZE_DIR
+echo done.
+echo
 
 # BUILD DS GAZE INFER PLUGIN
-echo Building gazeinfer library...
+echo Building Python wrapper library for gazeinfer...
 cd $GAZE_DIR/ds/lib/gazeinfer
 git clone https://github.com/NVIDIA-AI-IOT/deepstream_tao_apps
 env CUDA_VER=$CUDA_VER make
 cp dscprobe.so $GAZE_DIR/ds/lib
-
+echo done.
+echo
+echo Building gazeinfer library...
 cd deepstream_tao_apps/apps/tao_others/deepstream-gaze-app/gazeinfer_impl
 env CUDA_VER=$CUDA_VER make
 cp libnvds_gazeinfer.so $GAZE_DIR/ds/lib
 cd $GAZE_DIR
+echo done.
+echo
 
 # DOWNLOAD INFERENCE MODEL FROM NGC
-echo Downloading face detection model...
 cd $GAZE_DIR/model
-# for fp16
-#wget https://api.ngc.nvidia.com/v2/models/nvidia/tao/facenet/versions/deployable_v1.0/files/model.etlt -O model/face/facenet.etlt
-wget https://api.ngc.nvidia.com/v2/models/nvidia/tao/facenet/versions/pruned_quantized_v2.0.1/files/model.etlt -O face/facenet.etlt
-wget https://api.ngc.nvidia.com/v2/models/nvidia/tao/facenet/versions/pruned_quantized_v2.0.1/files/int8_calibration.txt -O face/facenet_cal.txt
-echo Downloading facial landmark model...
-wget https://api.ngc.nvidia.com/v2/models/nvidia/tao/fpenet/versions/deployable_v3.0/files/model.etlt -O faciallandmarks/fpenet.etlt
-wget https://api.ngc.nvidia.com/v2/models/nvidia/tao/fpenet/versions/deployable_v3.0/files/int8_calibration.txt -O faciallandmarks/fpenet_cal.txt
-echo Downloading gaze detection model...
-wget https://api.ngc.nvidia.com/v2/models/nvidia/tao/gazenet/versions/deployable_v1.0/files/model.etlt -O gaze/gazenet_facegrid.etlt
+echo -n Downloading face detection model... 
+if [ ! -f face/facenet.etlt ]; then
+	if [ "$TEGRA_ID" == 24 ] || [ "$TEGRA_ID" == 33 ]; then
+		# fp16:TX2/TX1/Nano
+		MODEL_URI=https://api.ngc.nvidia.com/v2/models/nvidia/tao/facenet/versions/deployable_v1.0/files/
+		wget $MODEL_URI/model.etlt -O face/facenet.etlt
+	else
+		# int8:Xavier or later
+		MODEL_URI=https://api.ngc.nvidia.com/v2/models/nvidia/tao/facenet/versions/pruned_quantized_v2.0.1/files/
+		wget $MODEL_URI/model.etlt -O face/facenet.etlt
+		wget $MODEL_URI/int8_calibration.txt -O face/facenet_cal.txt
+	fi
+fi
+echo done.
+echo
+echo -n Downloading facial landmark model... 
+if [ ! -f faciallandmark/fpenet.etlt ]; then
+	if [ "$TEGRA_ID" == 24 ] || [ "$TEGRA_ID" == 33 ]; then
+		# fp16:TX2/TX1/Nano
+		MODEL_URI=https://api.ngc.nvidia.com/v2/models/nvidia/tao/fpenet/versions/deployable_v1.0/files/
+		wget $MODEL_URI/model.etlt -O faciallandmarks/fpenet.etlt
+	else
+		# int8:Xavier or later
+		MODEL_URI=https://api.ngc.nvidia.com/v2/models/nvidia/tao/fpenet/versions/deployable_v3.0/files/
+		wget $MODEL_URI/model.etlt -O faciallandmarks/fpenet.etlt
+		wget $MODEL_URI/int8_calibration.txt -o faciallandmarks/fpenet_cal.txt
+	fi
+fi
+echo done.
+echo
+echo -n Downloading gaze detection model... 
+if [ ! -f gaze/gazenet_facegrid.etlt ]; then
+	MODEL_URI=https://api.ngc.nvidia.com/v2/models/nvidia/tao/gazenet/versions/deployable_v1.0/files/
+	wget $MODEL_URI/model.etlt -O gaze/gazenet_facegrid.etlt
+fi
+echo done.
 cd $GAZE_DIR
+echo
 
 # BUILD GAZE
 echo Downloading tao-converter...
 cd $GAZE_DIR/model/gaze
-wget https://developer.nvidia.com/jp46-20210820t231431z-001zip -O tao-converter-jp46.zip
-unzip -j tao-converter-jp46.zip '*/tao-converter'
+if [ ! -f $GAZE_DIR/model/gaze/tao-converter.zip ]; then
+	wget $TAO_CONVERTER_URI -O tao-converter.zip
+fi
+unzip -j tao-converter.zip '*/tao-converter'
 echo Building gaze model...
-tao-converter -k nvidia_tlt -p input_face_images:0,1x1x224x224,4x1x224x224,8x1x224x224 -p input_left_images:0,1x1x1x224x224,1x4x1x224x224,1x8x1x224x224 -p input_right_images:0,1x1x1x224x224,1x4x1x224x224,1x8x1x224x224 -p input_facegrid:0,1x1x1x625x1,1x4x1x625x1,1x8x1x625x1 -m 8 -t fp16 -w 1500000000 -e gazenet_facegrid_fp16_b8.engine gazenet.etlt
+# tao-converter fails to convert when passed 4d(nchw) specs with multiple input model for now.
+# so give the additional dummy dimension(1xNxCxHxW) as a workaround. (@2022/04/28)
+./tao-converter -k nvidia_tlt -p input_face_images:0,1x1x224x224,4x1x224x224,8x1x224x224 \
+       			-p input_left_images:0,1x1x1x224x224,1x4x1x224x224,1x8x1x224x224 \
+			-p input_right_images:0,1x1x1x224x224,1x4x1x224x224,1x8x1x224x224 \
+			-p input_facegrid:0,1x1x1x625x1,1x4x1x625x1,1x8x1x625x1 \
+			-m 8 -t fp16 -w $WORKSPACE_SIZE -e gazenet_facegrid_fp16_b8.engine \
+			gazenet.etlt
+cd $GAZE_DIR
+echo done.
+echo
 
+# CHANGE INFERENCE MODE
+echo Setting inference mode INT8 or FP16
+cd $GAZE_DIR/ds
+chmod +x chinfmod.sh
+if [ "$TEGRA_ID" == 24 ] || [ "$TEGRA_ID" == 33 ]; then
+	# fp16:TX2/TX1/Nano
+	./chinfmod.sh -fp16
+else
+	# int8:Xavier or later
+	./chinfmod.sh -int8
+fi
+cd $GAZE_DIR
+echo done.
+echo
+
+echo All done.
+echo

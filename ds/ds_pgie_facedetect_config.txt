@@ -61,7 +61,6 @@
 gpu-id=0
 net-scale-factor=0.0039215697906911373
 model-engine-file=../model/face/facenet.etlt_b1_gpu0_int8.engine
-#model-engine-file=../model/face/facenet.etlt_b1_gpu0_fp16.engine
 tlt-encoded-model=../model/face/facenet.etlt
 tlt-model-key=nvidia_tlt
 int8-calib-file=../model/face/facenet_cal.txt

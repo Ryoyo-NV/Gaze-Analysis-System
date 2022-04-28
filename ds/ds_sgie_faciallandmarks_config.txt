@@ -49,7 +49,6 @@
 [property]
 gpu-id=0
 model-engine-file=../model/faciallandmarks/fpenet.etlt_b32_gpu0_int8.engine
-#model-engine-file=../model/faciallandmarks/fpenet.etlt_b32_gpu0_fp16.engine
 tlt-model-key=nvidia_tlt
 tlt-encoded-model=../model/faciallandmarks/fpenet.etlt
 int8-calib-file=../model/faciallandmarks/fpenet_cal.txt
