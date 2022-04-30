@@ -76,7 +76,6 @@ network-type=0
 num-detected-classes=1
 interval=0
 gie-unique-id=1
-uff-input-blob-name=input_1
 output-blob-names=output_bbox/BiasAdd;output_cov/Sigmoid
 #scaling-filter=0
 #scaling-compute-hw=0

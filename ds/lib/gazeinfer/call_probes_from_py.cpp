@@ -29,15 +29,19 @@ using namespace std;
 using std::string;
 
 std::unique_ptr<cvcore::faciallandmarks::FacialLandmarksPostProcessor> facemarkpost;
+std::string kp_location_layer_name;
+std::string kp_confidence_layer_name;
+#define CONV_KEYPOINTS_M80_INT8 "conv_keypoints_m80"
 
 PyObject* init_fpe_postprocess(PyObject* self, PyObject* args, PyObject* kw)
 {
-    static const char* argkws[] = {"num", "max_bsize", "in_width", "in_height", NULL};
+    static const char* argkws[] = {"num", "max_bsize", "in_width", "in_height", "out0_name", "out1_name", NULL};
     size_t num=80, max_bsize=32, in_width=80, in_height=80;
+    const char *out0=NULL, *out1=NULL;
 
-    if (!PyArg_ParseTupleAndKeywords(args, kw, "|iiii", const_cast<char**>(argkws),
-            &num, &max_bsize, &in_width, &in_height))
-        return NULL;
+    if (!PyArg_ParseTupleAndKeywords(args, kw, "|iiiiss", const_cast<char**>(argkws),
+            &num, &max_bsize, &in_width, &in_height, &out0, &out1))
+        return Py_False;
     
     size_t numFaciallandmarks = num;
     cvcore::ModelInputParams ModelInputParams = {max_bsize, in_width, in_height, cvcore::Y_F32};
@@ -47,7 +51,10 @@ PyObject* init_fpe_postprocess(PyObject* self, PyObject* args, PyObject* kw)
     ModelInputParams,numFaciallandmarks));
     facemarkpost = std::move(faciallandmarkpostinit);
 
-    return Py_BuildValue("i", GST_PAD_PROBE_OK);
+    kp_location_layer_name = out0;
+    kp_confidence_layer_name = out1;
+
+    return Py_True;
 }
 
 /*Generate bodypose2d display meta right after inference */
@@ -283,12 +290,17 @@ sgie_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info, gpointer u_data)
             meta->output_layers_info + meta->num_output_layers);
           //Prepare CVCORE input layers
           if (strcmp(outputLayersInfo[i].layerName,
-              "softargmax") == 0) {
+              kp_location_layer_name.c_str()) == 0) {
             //This layer output landmarks coordinates
             heatmap_data = (float *)meta->out_buf_ptrs_host[i];
           } else if (strcmp(outputLayersInfo[i].layerName,
-              "softargmax:1") == 0) {
+              kp_confidence_layer_name.c_str()) == 0) {
             confidence = (float *)meta->out_buf_ptrs_host[i];
+          } else if (strcmp(outputLayersInfo[i].layerName,
+              CONV_KEYPOINTS_M80_INT8) == 0) ; // nothing to do
+          else {
+            g_printerr ("Failed to parse output layer name [%s]\n",
+              outputLayersInfo[i].layerName);
           }
         }
 

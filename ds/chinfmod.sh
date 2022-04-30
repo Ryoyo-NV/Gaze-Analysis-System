@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Config files need to change int8 or fp16
 confs=(
 	"ds_pgie_facedetect_config.txt"
 	"ds_sgie_faciallandmarks_config.txt"
@@ -24,7 +25,11 @@ else
 	exit 1
 fi
 
+# Change the model engine(cache) path and inference mode
 for f in "${confs[@]}" ; do
 	sed -i -e "s/^model-engine-file=\(.*\)${PREV_STR}/model-engine-file=\1${MODE_STR}/g" $f
 	sed -i -e "s/^network-mode=.*/network-mode=${MODE}/g" $f
 done
+
+# Change the FPENet inference mode to suit the layer names for the model and postprocess
+sed -i -e "s/^INFER_FPENET_MODEL_TYPE.*=.*/INFER_FPENET_MODEL_TYPE=${MODE}/g" "ds_pipeline.py"

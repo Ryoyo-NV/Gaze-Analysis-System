@@ -26,7 +26,21 @@ last_sample = None
 GIE_ID_DETECT = 1
 GIE_ID_AGE = 2
 GIE_ID_GENDER = 3
+GIE_ID_FPE = 4
 
+# The pretrained FPENet model on NGC has defferent output layer names by either int8 or fp16.
+# So it is switched the layer names here. Which models you downloaded depends on the download link.
+# Please see the section of downloading FPENet model in setup.sh.
+# 1: int8, 2: fp16
+INFER_FPENET_MODEL_TYPE=1
+if (INFER_FPENET_MODEL_TYPE == 1):
+    softargmax_name = "softargmax"
+    softargmax1_name = "softargmax:1"
+else:
+    softargmax_name = "softargmax/strided_slice:0"
+    softargmax1_name = "softargmax/strided_slice_1:0"
+
+# Properties for Gstreamer pipeline
 elem_props = {
     "filesrc": {
         "location": ""
@@ -41,7 +55,7 @@ elem_props = {
         "mjpeg": True
     },
     "filter1": {
-        "caps": "video/x-raw(memory:NVMM), width=1280, height=720, format=NV12, framerate={fps}/1"
+        "caps": "video/x-raw(memory:NVMM), width=1280, height=720, format=NV12"
     },
     "streammux": {
         "width": 1280,
@@ -76,14 +90,14 @@ elem_props = {
         "customlib-props": "config-file:ds/lib/gazenet_config.txt"
     },
     "filter2": {
-        "caps": "video/x-raw, format={form}, width={w}, height={h}, framerate={fps}/1"
+        "caps": "video/x-raw, format={form}, width={w}, height={h}"
     },
     "filter3": {
         "caps": "video/x-raw, format={form}"
     },
     "sink": {
         "emit-signals": True,
-        "caps": "video/x-raw, format={form}, width={w}, height={h}, framerate={fps}/1",
+        "caps": "video/x-raw, format={form}, width={w}, height={h}",
 #        "drop": True,
 #        "max-buffers": 0,
 #        "sync": True,
@@ -108,7 +122,7 @@ def create_element(pipeline, element, name, props=None):
 
 class DsVideo:
 
-    def __init__(self, video_path, media="video", codec="h264", width=1280, height=720, fps=30, format="BGR", is_loopback=False):
+    def __init__(self, video_path, media="video", codec="h264", width=1280, height=720, camfps=30, format="BGR", is_loopback=False):
 
         # Create gstreamer pipeline
         #
@@ -120,13 +134,13 @@ class DsVideo:
         elif media == "v4l2":
             elem_props["v4l2src"]["device"] = video_path
             if codec == "mjpg":
-                elem_props["v4l2filter"]["caps"] = elem_props["v4l2filter"]["caps"].format(cap="image/jpeg", w=width, h=height, fps=fps)
+                elem_props["v4l2filter"]["caps"] = elem_props["v4l2filter"]["caps"].format(cap="image/jpeg", w=width, h=height, fps=camfps)
             else:
-                elem_props["v4l2filter"]["caps"] = elem_props["v4l2filter"]["caps"].format(cap="video/x-raw", w=width, h=height, fps=fps)
-        elem_props["filter1"]["caps"] = elem_props["filter1"]["caps"].format(fps=fps)
-        elem_props["filter2"]["caps"] = elem_props["filter2"]["caps"].format(w=width, h=height, form="RGBA", fps=fps)
+                elem_props["v4l2filter"]["caps"] = elem_props["v4l2filter"]["caps"].format(cap="video/x-raw", w=width, h=height, fps=camfps)
+        elem_props["filter1"]["caps"] = elem_props["filter1"]["caps"]
+        elem_props["filter2"]["caps"] = elem_props["filter2"]["caps"].format(w=width, h=height, form="RGBA")
         elem_props["filter3"]["caps"] = elem_props["filter3"]["caps"].format(form="BGR")
-        elem_props["sink"]["caps"] = elem_props["sink"]["caps"].format(w=width, h=height, form=format, fps=fps)
+        elem_props["sink"]["caps"] = elem_props["sink"]["caps"].format(w=width, h=height, form=format)
         print("[DEBUG] DeepStream pipeline properties: ", elem_props)
 
         #
@@ -182,7 +196,8 @@ class DsVideo:
         tmp_pad.add_probe(Gst.PadProbeType.BUFFER, nvtile_pad_buffer_probe, None)
 
         # init fpe postprocess for buffer probe
-        dscprobes.init_fpe_postprocess(num=80, max_bsize=32, in_width=80, in_height=80)
+        dscprobes.init_fpe_postprocess(num=80, max_bsize=32, in_width=80, in_height=80, \
+                out0_name=softargmax_name, out1_name=softargmax1_name)
 
         #
         # Link elements each other

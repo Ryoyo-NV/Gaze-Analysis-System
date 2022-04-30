@@ -28,14 +28,14 @@ def main():
         parser.add_argument('--height', type=int, default=720)
         parser.add_argument('--codec', choices=['h264', 'h265', 'mjpg'], default='h264')
         parser.add_argument('--media', choices=['video', 'v4l2'], default='video')
-        parser.add_argument('--max-fps', type=int, default=30)
+        parser.add_argument('--cam-fps', type=int, default=30)
         args = parser.parse_args()
 
         # media
         print("deepstream pipeline initializing...", file=sys.stderr)
-        video = DsVideo(args.path, args.media, args.codec, args.width, args.height, args.max_fps, "BGR")
+        video = DsVideo(args.path, args.media, args.codec, args.width, args.height, args.cam_fps, "BGR")
 
-        display = Display(args.width, args.height, format="BGR", fps=args.max_fps)
+        display = Display(args.width, args.height, format="BGR", fps=args.cam_fps)
 
         config = Config()
         message_manager = MessageManager(config)
@@ -98,7 +98,7 @@ def main():
 
             # print FPS
             dt = time.time() - t0
-            lim = 1.0 / args.max_fps
+            lim = 1.0 / args.cam_fps
             if dt < lim:
                 time.sleep(lim - dt)
             t1 = time.time()
