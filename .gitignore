@@ -8,6 +8,7 @@ model/faciallandmarks/*.etlt
 model/faciallandmarks/*.txt
 model/gaze/*.engine
 model/gaze/*.etlt
+model/gaze/tao-converter*
 !model/*
 model/age/*.engine
 model/gender/*.engine
