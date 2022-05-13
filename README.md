@@ -25,14 +25,11 @@ For uses other than the above, please replace the model with another model.
 Test on:
 
 - Jetson AGX Xavier, JetPack 4.6.1, Video, and USB webcam. 
+- Jetson TX2, JetPack 4.6.1
 
 Note: Recommend Jetson Xavier NX or AGX Xavier.  
-The Age and gender prebuild engine model with TenserRT are built for Xavier GPU(compute capability 7.2).  
-If you want to run on not Xavier(e.g. Nano), you need to rebuild them on your device.
-See [model/readme](https://github.com/Ryoyo-NV/Gaze-Analysis-System/tree/main/model), and more.
 
 ## Installation
-There are two options to setup and it can be run local or Docker container.
 
 ### Requirements:  
 
@@ -40,20 +37,17 @@ There are two options to setup and it can be run local or Docker container.
 - TensorRT 8.2.1
 - Gstremer 1.14.5
 
-Options (using visualize data):
+Optional (using visualize data):
 - Open Distro for ElasticSearch 1.10.1
 - Open Distro for Kibana 1.10.1
 - Azure Iot Hub
-- Azure Visual Machine
+- Azure Virtual Machine
 
 Note: Excludes packages already included in JetPack. (ex. Python3.6, OpenCV, and etc.)  
 See above for tested versions. 
 ### Option 1: Installing local  
 
 #### 1. Install DeepStream SDK
-Installing the five methods. Using the DeepStream tar package here.  
-Download package [here](https://developer.nvidia.com/deepstream-getting-started) .
-
 ```
 sudo apt install deepstream-6.0
 ```
@@ -73,7 +67,7 @@ Note1: setup.sh requires sudo password to install some apt packages.
 Note2: It takes about 15 minutes to finish. 
 
 
-### Option 2: Building  docker image 
+### Option 2: Building docker image 
 
 TBD
 
@@ -85,8 +79,12 @@ Set the path for cvcore_libs to LD_LIBRARY_PATH env.
 export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib/cvcore_libs:$LD_LIBRARY_PATH
 ```
 
-### With Kibana
-Run the command after starting the Open Distro for Elasticsearch(Elasticsearch, Kibana) service. The data of visualize is sent to Open Distro for Elasticsearch.  
+Optional: If you use Azure IoT Hub to analize or visualize gaze data, set the connection string in azure_config.ini
+```
+HOST_NAME = <iot hub hostname>
+DEVICE_ID = <iot device id>
+SHARED_ACCESS_KEY = <iot device shared access key>
+```
 
 Using video file, path to own video file dir. See `python3 run.py -h` for detailed options.
 ```
@@ -97,26 +95,10 @@ Using USB webcam, using `--media` argument, path to USB webcam.
 ```
 pyhon3 run.py [PATH/TO/WEBCAM] --media v4l2 
 ```
-### Without Kibana
-Only Draw the bounding box, gender and age on the display.
 
-1. Comment out of `run.py` the following:
-  ```
-  #comment out of part1  
-    from message_manager import MessageManager
-    from config import Config
-  
-  #comment out of part2 
-    config = Config()
-    message_manager = MessageManager(config)
-    gaze_msg_sender = GazeMessageSender(message_manager, send_msg_interval=5.0)
+Note1: It takes some minutes to run at first time because some models need to convert for TensorRT engines. 
 
-  #comment out of part3
-    gaze_msg_sender(faces, gaze_cpu)
-  ``` 
-
-2. Save file and run file  
-Same command with Kibana. See With Kibana command.
+Note2: If you don't use with Azure IoT Hub, you can ignore the message sending errors while running.
 
 
 ##  Data analysis and visualization
