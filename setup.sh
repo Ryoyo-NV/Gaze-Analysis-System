@@ -122,7 +122,7 @@ if [ ! -f faciallandmarks/fpenet.etlt ]; then
 		# int8:Xavier or later
 		MODEL_URI=https://api.ngc.nvidia.com/v2/models/nvidia/tao/fpenet/versions/deployable_v3.0/files/
 		wget $MODEL_URI/model.etlt -O faciallandmarks/fpenet.etlt
-		wget $MODEL_URI/int8_calibration.txt -o faciallandmarks/fpenet_cal.txt
+		wget $MODEL_URI/int8_calibration.txt -O faciallandmarks/fpenet_cal.txt
 	fi
 fi
 echo done.
