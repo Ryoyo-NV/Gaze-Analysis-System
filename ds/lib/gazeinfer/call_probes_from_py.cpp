@@ -58,6 +58,7 @@ PyObject* init_fpe_postprocess(PyObject* self, PyObject* args, PyObject* kw)
 }
 
 /*Generate bodypose2d display meta right after inference */
+/* refer to: https://github.com/NVIDIA-AI-IOT/deepstream_tao_apps/blob/master/apps/tao_others/deepstream-gaze-app/gazeinfer_impl/gazeinfer.cpp */
 static GstPadProbeReturn
 tile_sink_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
     gpointer u_data)
@@ -181,6 +182,7 @@ tile_sink_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info,
  * of the PGIE's next queue element. The face bbox will be scale to square for
  * facial marks.
  */
+/* refer to: https://github.com/NVIDIA-AI-IOT/deepstream_tao_apps/blob/master/apps/tao_others/deepstream-gaze-app/gazeinfer_impl/gazeinfer.cpp */
 static GstPadProbeReturn
 pgie_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info, gpointer u_data)
 {
@@ -249,6 +251,7 @@ pgie_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info, gpointer u_data)
  * of the SGIE's next queue element. The facial marks output will be processed
  * and the facial marks metadata will be generated.
  */
+/* refer to: https://github.com/NVIDIA-AI-IOT/deepstream_tao_apps/blob/master/apps/tao_others/deepstream-gaze-app/gazeinfer_impl/gazeinfer.cpp */
 static GstPadProbeReturn
 sgie_pad_buffer_probe (GstPad * pad, GstPadProbeInfo * info, gpointer u_data)
 {
