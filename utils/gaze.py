@@ -4,7 +4,7 @@ import json
 import datetime
 
 
-def is_looking(gaze, threshold=250):
+def is_looking(gaze, threshold=100):
     x, y, z, theta, phi = gaze
     return (x**2 + y**2) < threshold**2
 
@@ -34,7 +34,7 @@ class GazeMessageSender:
             if len(face["gaze"]) == 0:
                 cur_state = False
             else:
-                cur_state = is_looking(face["gaze"], threshold=250)
+                cur_state = is_looking(face["gaze"], threshold=100)
             class GazeState:
                 pass
             cur_gaze = GazeState()

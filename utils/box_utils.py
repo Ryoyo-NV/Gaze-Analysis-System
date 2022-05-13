@@ -98,7 +98,8 @@ class TextDraw(object):
 
             age = "{}".format(int(face["age"]))
             
-            if face["gender"] >= 0.6:
+            # TODO: fine-tuning for gender estimation accuracy
+            if face["gender"] >= 0.7:
                 gender = 'M'
             else:
                 gender = 'F'
