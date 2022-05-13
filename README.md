@@ -79,19 +79,19 @@ Set the path for cvcore_libs to LD_LIBRARY_PATH env.
 export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib/cvcore_libs:$LD_LIBRARY_PATH
 ```
 
-Optional: If you use Azure IoT Hub to analize or visualize gaze data, set the connection string in azure_config.ini
+(Optional) If you use Azure IoT Hub to analize or visualize gaze data, set the connection string in azure_config.ini
 ```
 HOST_NAME = <iot hub hostname>
 DEVICE_ID = <iot device id>
 SHARED_ACCESS_KEY = <iot device shared access key>
 ```
 
-Using video file, path to own video file dir. See `python3 run.py -h` for detailed options.
+With video file, specify the path to your video file. See `python3 run.py -h` for detailed options.
 ```
-python3 run.py [PATH/TO/VIDEO_DIR/VIDEO] --codec h264
+python3 run.py [PATH/TO/VIDEO_FILE] --codec h264
 ```
 
-Using USB webcam, using `--media` argument, path to USB webcam.  
+With USB webcam, specify the path to USB webcam and using `--media` argument.  
 ```
 pyhon3 run.py [PATH/TO/WEBCAM] --media v4l2 
 ```
