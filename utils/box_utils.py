@@ -111,4 +111,16 @@ class TextDraw(object):
             cv2.putText(image, label, (x0, y0), self.font, self.font_scale, self.color, self.thickness, lineType=cv2.LINE_AA)
 
 
+class GazeDraw(object):
 
+    def __call__(self, image, faces):
+
+        for i, f in enumerate(faces):
+
+            f_center_x = int(f["bbox"]["left"]) + int(f["bbox"]["width"] / 2)
+            f_center_y = int(f["bbox"]["top"]) + int(f["bbox"]["height"] / 2)
+
+            gaze_x = int(f["gaze"][0]) + f_center_x
+            gaze_y = int(f["gaze"][1]) + f_center_y
+
+            cv2.drawMarker(image, (gaze_x, gaze_y), (255,255,255), markerSize=20, thickness=3)

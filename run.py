@@ -11,7 +11,7 @@ from ds.ds_pipeline import DsVideo
 
 sys.path.append("utils")
 from display import Display
-from box_utils import BoxDraw, TextDraw
+from box_utils import BoxDraw, TextDraw, GazeDraw
 from gaze import is_looking, GazeMessageSender
 from message_manager import MessageManager
 from config import Config
@@ -43,6 +43,7 @@ def main():
     
         box_draw = BoxDraw()
         text_draw = TextDraw()
+        gaze_draw = GazeDraw()
     
         video.start()
         t0 = time.time()
@@ -89,6 +90,7 @@ def main():
                     try:
                         box_draw(image, face_boxes, colors)
                         text_draw(image, faces)
+                        gaze_draw(image, faces)
                     except (KeyError, ValueError):
                         print("Error: Failed to draw bbox or text", file=sys.stderr)
                         traceback.print_exc()
