@@ -93,7 +93,7 @@ python3 run.py [PATH/TO/VIDEO_FILE] --codec h264
 
 With USB webcam, specify the path to USB webcam and using `--media` argument.  
 ```
-pyhon3 run.py [PATH/TO/WEBCAM] --media v4l2 
+pyhon3 run.py [PATH/TO/WEBCAM] --media v4l2 --cam-fps 10
 ```
 
 Note1: It takes some minutes to run at first time because some models need to convert for TensorRT engines. 
