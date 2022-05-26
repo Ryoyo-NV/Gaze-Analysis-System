@@ -77,8 +77,9 @@ echo
 echo Building Python wrapper library for gazeinfer...
 cd $GAZE_DIR/ds/lib/gazeinfer
 if [ ! -d deepstream_tao_apps ]; then
-	git clone https://github.com/NVIDIA-AI-IOT/deepstream_tao_apps
+	git clone https://github.com/NVIDIA-AI-IOT/deepstream_tao_apps -b release/tao3.0_ds6.0.1
 fi
+
 env CUDA_VER=$CUDA_VER make
 cp dscprobes.so $GAZE_DIR/ds/lib
 echo done.
