@@ -23,7 +23,7 @@ function finally {
 echo Checking DeepStream installation...
 if [ ! -f $DEEPSTREAM_DIR/version ]; then 
 	echo Installing DeepStream SDK...
-	sudo apt install -y deepstream-*
+	sudo apt install -y deepstream-6.0
 fi
 echo done.
 echo
@@ -50,7 +50,7 @@ if [[ "$PYDS_AUTHOR" != *NVIDIA* ]]; then
 	echo Building pyds...
 	cd $GAZE_DIR/ds/lib
 	if [ ! -d deepstream_python_apps ]; then
-		git clone https://github.com/NVIDIA-AI-IOT/deepstream_python_apps
+		git clone https://github.com/NVIDIA-AI-IOT/deepstream_python_apps -b v1.1.1
 	fi
 	cd deepstream_python_apps/bindings/
 	git submodule update --init
