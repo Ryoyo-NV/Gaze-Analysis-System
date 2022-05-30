@@ -45,7 +45,7 @@ Optional (using visualize data):
 
 Note: Excludes packages already included in JetPack. (ex. Python3.6, OpenCV, and etc.)  
 See above for tested versions. 
-### Option 1: Installing local  
+### Option 1: Building from source code  
 
 #### 1. Install DeepStream SDK
 ```
@@ -78,6 +78,10 @@ Set the path for cvcore_libs to LD_LIBRARY_PATH env.
 ```
 export LD_LIBRARY_PATH=/opt/nvidia/deepstream/deepstream/lib/cvcore_libs:$LD_LIBRARY_PATH
 ```
+(Optional) Add LD_LIBRARY_PATH to your .bashrc if you don't want to set it every time.
+```
+echo export LD_LIBRARY_PATH='/opt/nvidia/deepstream/deepstream/lib/cvcore_libs:$LD_LIBRARY_PATH' >> ~/.bashrc
+```
 
 (Optional) If you use Azure IoT Hub to analize or visualize gaze data, set the connection string in azure_config.ini
 ```
@@ -99,6 +103,20 @@ pyhon3 run.py [PATH/TO/WEBCAM] --media v4l2 --cam-fps 10
 Note1: It takes some minutes to run at first time because some models need to convert for TensorRT engines. 
 
 Note2: If you don't use with Azure IoT Hub, you can ignore the message sending errors while running.
+
+
+## Troubleshooting
+### Can't run with webcam
+If you can't run with your webcam, check your webcam specs with v4l2-ctl.
+```
+sudo apt install v4l-utils
+v4l2-ctl --list-formats-ext
+```
+Then specify --width, --hight, --cam-fps or --codec mjpg corresponding to your webcam.
+For example:
+```
+python3 run.py /dev/video0 --media v4l2 --codec mjpg --width 1280 --height 720 --cam-fps 16
+```
 
 
 ##  Data analysis and visualization
