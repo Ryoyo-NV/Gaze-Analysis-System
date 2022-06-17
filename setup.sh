@@ -21,21 +21,22 @@ function finally {
 
 # CHECK DEEPSTREAM INSTALATION
 echo Checking DeepStream installation...
+apt update
 if [ ! -f $DEEPSTREAM_DIR/version ]; then 
 	echo Installing DeepStream SDK...
-	sudo apt install -y deepstream-6.0
+	apt install -y deepstream-6.0
 fi
 echo done.
 echo
 
 # INSTALL DEPENDENCIES
 echo Installing dependencies...
-sudo apt update
-sudo apt install -y gstreamer1.0-tools gstreamer1.0-alsa gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+apt update
+apt install -y gstreamer1.0-tools gstreamer1.0-alsa gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
 	gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly gstreamer1.0-libav libgstreamer1.0-dev\
 	libgstreamer-plugins-base1.0-dev   libgstreamer-plugins-good1.0-dev   libgstreamer-plugins-bad1.0-dev\
 	python3-dev python-gi-dev python3-pip git libgirepository1.0-dev libcairo2-dev apt-transport-https\
-       	ca-certificates cmake libjpeg-dev
+	ca-certificates cmake libjpeg-dev unzip
 pip3 install Pillow azure-iot-device
 echo done.
 echo
