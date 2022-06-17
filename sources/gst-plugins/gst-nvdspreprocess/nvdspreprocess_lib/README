@@ -1,0 +1,36 @@
+################################################################################
+# Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+#
+# NVIDIA Corporation and its licensors retain all intellectual property
+# and proprietary rights in and to this software, related documentation
+# and any modifications thereto.  Any use, reproduction, disclosure or
+# distribution of this software and related documentation without an express
+# license agreement from NVIDIA Corporation is strictly prohibited.
+#
+################################################################################
+
+Refer to the DeepStream SDK documentation for a description of the plugin.
+--------------------------------------------------------------------------------
+Pre-requisites:
+- GStreamer-1.0 Development package
+- GStreamer-1.0 Base Plugins Development package
+
+Install using:
+   sudo apt-get install libgstreamer-plugins-base1.0-dev libgstreamer1.0-dev
+--------------------------------------------------------------------------------
+Compiling and installing the plugin:
+Export or set in Makefile the appropriate cuda version using CUDA_VER
+Run make and sudo make install
+
+NOTE: To compile the sources, run make with "sudo" or root permission.
+
+About:
+This plugin performs customs preprocessing for 2d convolution NCHW/NHWC network order.
+compile this library separately and provide libcustom2d_preprocess.so path in nvdspreprocess config.
+
+Run:
+gst-launch-1.0 uridecodebin uri= file:///samples/streams/sample_1080p_h264.mp4 ! m.sink_0 \
+nvstreammux name=m batch-size=1 width=1920 height=1080 ! \
+nvdspreprocess config-file=config_preprocess.txt  ! \
+nvinfer config-file-path=config_infer.txt input-tensor-meta=1 batch-size=1 ! \
+nvmultistreamtiler width=1920 height=1080 ! nvvideoconvert ! nvdsosd ! nvvideoconvert ! nveglglessink
