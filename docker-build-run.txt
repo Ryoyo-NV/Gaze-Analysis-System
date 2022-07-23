@@ -1,7 +1,7 @@
 # example to run image
 
 # build docker image
-docker build -t gaze-analysis .
+bash ./docker-build.sh
 
 # exec docker
 docker run -it --rm --net=host --runtime nvidia -e DISPLAY=$DISPLAY -v /tmp/.X11-unix/:/tmp/.X11-unix --device /dev/video0:/dev/video0:mrw gaze-analysis
