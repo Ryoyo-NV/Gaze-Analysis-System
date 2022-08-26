@@ -1,0 +1,13 @@
+# example to run image
+
+# build docker image
+bash ./docker-build.sh
+
+# exec command 'xhost +' on terminal before run docker
+xhost +
+
+# run docker
+docker run -it --rm --net=host --runtime nvidia -e DISPLAY=$DISPLAY -v /tmp/.X11-unix/:/tmp/.X11-unix --device /dev/video0:/dev/video0:mrw gaze-analysis
+
+# exec run.py in docker container
+python3 run.py /dev/video0 --media v4l2 --codec mjpg --width 1280 --height 720
